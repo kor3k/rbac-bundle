@@ -60,13 +60,13 @@ trait NodeEntityTrait
         $query->setParameter(":right", $info->getRight());
         $query->execute();
 
-        $dql = "UPDATE {$this->getClassName()} node SET node.right = node.right - :widht WHERE node.right > :right";
+        $dql = "UPDATE {$this->getClassName()} node SET node.right = node.right - :width WHERE node.right > :right";
         $query = $entityManager->createQuery($dql);
         $query->setParameter(":width", $width);
         $query->setParameter(":right", $info->getRight());
         $query->execute();
 
-        $dql = "UPDATE {$this->getClassName()} node SET node.left = node.left - :widht WHERE node.left > :right";
+        $dql = "UPDATE {$this->getClassName()} node SET node.left = node.left - :width WHERE node.left > :right";
         $query = $entityManager->createQuery($dql);
         $query->setParameter(":width", $width);
         $query->setParameter(":right", $info->getRight());
@@ -132,16 +132,23 @@ trait NodeEntityTrait
         return $row['id'];
     }
 
-    public function reset()
+    public function reset(): void
     {
-        $tableName = $this->getClassMetadata()
-            ->getTableName();
-        $sql = "DELETE FROM {$tableName} WHERE id > 1;";
-        $sql .= "UPDATE {$tableName} SET tree_left = 0, tree_right = 1 WHERE id = 1;";
-        $sql .= "ALTER TABLE {$tableName} AUTO_INCREMENT = 2;";
-        $this->getEntityManager()
-            ->getConnection()
-            ->executeQuery($sql);
+        $connection = $this->getEntityManager()->getConnection();
+        $tableName = $this->getClassMetadata()->getTableName();
+        
+        if ($connection->getDatabasePlatform() instanceof PostgreSQLPlatform) {
+            // PostgreSQL
+            $connection->executeQuery("DELETE FROM {$tableName} WHERE id > 1");
+            $connection->executeQuery("UPDATE {$tableName} SET tree_left = 0, tree_right = 1 WHERE id = 1");
+            $connection->executeQuery("SELECT setval(pg_get_serial_sequence('{$tableName}', 'id'), 2, false)");
+        } else {
+            // MySQL/MariaDB
+            $sql = "DELETE FROM {$tableName} WHERE id > 1;";
+            $sql .= "UPDATE {$tableName} SET tree_left = 0, tree_right = 1 WHERE id = 1;";
+            $sql .= "ALTER TABLE {$tableName} AUTO_INCREMENT = 2;";
+            $connection->executeQuery($sql);
+        }
     }
 
     public function updateForAdd(int $parentId, string $nodeClass, string $code, string $description): Node
